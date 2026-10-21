@@ -54,7 +54,9 @@ const mk = async () => {
   await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
-  page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
+  // Missing font files 404 until the (email-gated) fallback fonts are added; everything else counts.
+  page.on("response", (r) => r.status() >= 400 && !r.url().includes("/fonts/") && errors.push(`http ${r.status()}: ${r.url()}`));
+  page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(`console: ${m.text()}`));
   return page;
 };
 
@@ -91,7 +93,7 @@ try {
   await bea.keyboard.press("End");
   await bea.keyboard.type(" (Bea)");
   await ada.locator(".ProseMirror li", { hasText: "QA pass (Bea)" }).waitFor({ timeout: 3000 });
-  await ada.locator(".avatar-wrap[title^='Bea']").waitFor();
+  await ada.locator(".presence-trigger[aria-label^='Bea']").waitFor();
   log("Bea's typing appears live for Ada; Bea in Ada's presence bar");
 
   // The agent.
@@ -109,22 +111,34 @@ try {
   log("agent's edits, cursor and status visible to Ada");
 
   // Ada formats with the toolbar: select "review goes well", bigger serif green + link.
-  const p = ada.locator(".ProseMirror p", { hasText: "We ship" });
-  await p.evaluate((el) => {
-    const text = el.lastChild; // " if the review goes well."
-    const node = [...el.querySelectorAll("*"), el].flatMap((n) => [...n.childNodes]).find((n) => n.nodeType === 3 && n.textContent.includes("review"));
+  // Select the word "review" the way a person does: double-click it.
+  const box = await ada.evaluate(() => {
+    const p = [...document.querySelectorAll(".ProseMirror p")].find((el) => el.textContent.includes("the review"));
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode()) && !node.textContent.includes("review"));
+    const range = document.createRange();
     const i = node.textContent.indexOf("review");
-    const r = document.createRange();
-    r.setStart(node, i);
-    r.setEnd(node, i + "review".length);
-    const s = getSelection();
-    s.removeAllRanges();
-    s.addRange(r);
+    range.setStart(node, i);
+    range.setEnd(node, i + "review".length);
+    const r = range.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await ada.mouse.dblclick(box.x, box.y);
+  // ProseMirror adopts the browser's selection on its next selectionchange; let it land.
+  await ada.waitForFunction(() => {
+    const s = window.komoreView.state.selection;
+    return window.komoreView.state.doc.textBetween(s.from, s.to) === "review";
   });
   await ada.waitForTimeout(100);
-  await ada.getByRole("combobox", { name: "Font", exact: true }).selectOption("serif");
-  await ada.getByRole("combobox", { name: "Font size" }).selectOption("20");
+  // Base UI selects: open with the keyboard-reachable trigger, pick an option.
+  await ada.getByRole("combobox", { name: "Font", exact: true }).click();
+  await ada.getByRole("option", { name: "Serif" }).click();
+  await ada.getByRole("combobox", { name: "Font size" }).click();
+  await ada.getByRole("option", { name: "20", exact: true }).click();
   await ada.getByRole("button", { name: "Text color" }).click();
+  const portalVar = await ada.evaluate(() => getComputedStyle(document.querySelector(".color-popup")).getPropertyValue("--neutral-1").trim());
+  if (!portalVar) throw new Error("portalled popover lost the theme variables");
   await ada.locator(".swatch[title='green']").click();
   await ada.getByRole("button", { name: "Link" }).click();
   await ada.getByPlaceholder("Paste or type a link").fill("example.com/review");
@@ -133,6 +147,30 @@ try {
   const text = komore("read", "--text");
   log("agent reads Ada's formatting:\n" + text.split("\n").map((l) => "    " + l).join("\n"));
   if (!text.includes("[[review](https://example.com/review)]{color=green font=serif size=20}")) throw new Error("toolbar formatting not reflected");
+
+  // Keyboard: the toolbar's style select opens and commits with the keyboard alone.
+  await ada.locator(".ProseMirror h1").getByText("Launch plan").click();
+  const styleSelect = ada.getByRole("combobox", { name: "Text style" });
+  await ada.waitForFunction(() => document.querySelector('[aria-label="Text style"]')?.textContent?.includes("Heading 1"));
+  await styleSelect.focus();
+  await ada.keyboard.press("ArrowDown");
+  await ada.getByRole("listbox").waitFor();
+  await ada.waitForTimeout(200);
+  await ada.keyboard.press("ArrowDown");
+  await ada.waitForTimeout(200);
+  await ada.keyboard.press("Enter");
+  await ada.locator(".ProseMirror h2", { hasText: "Launch plan" }).waitFor({ timeout: 3000 });
+  // Closing the select hands focus back to the document (finalFocus), so ⌘Z reaches the editor.
+  await ada.waitForFunction(() => document.activeElement?.classList.contains("ProseMirror"));
+  await ada.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+z`);
+  await ada.locator(".ProseMirror h1", { hasText: "Launch plan" }).waitFor({ timeout: 3000 });
+  log("keyboard: select opened, changed the heading, undone");
+  // Theme scope: the provider is in light mode and portalled popups carry the theme variables.
+  const scope = await ada.evaluate(() => {
+    const root = document.querySelector(".graphical-theme");
+    return { mode: root?.getAttribute("data-color-mode"), theme: root?.getAttribute("data-graphical-theme") };
+  });
+  if (scope.mode !== "light" || scope.theme !== "Atlas") throw new Error("theme scope wrong: " + JSON.stringify(scope));
 
   // Copy as Markdown: whole doc, then selection.
   await ada.locator(".ProseMirror h1").click();
@@ -156,7 +194,7 @@ try {
   await ada.locator(".ProseMirror h2").click({ position: { x: 4, y: 12 } });
   for (let i = 0; i < 5; i++) await ada.keyboard.press("Shift+ArrowRight");
   await ada.waitForTimeout(100);
-  await ada.locator(".toolbar").getByRole("button", { name: "Comment", exact: true }).click();
+  await ada.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Comment", exact: true }).click();
   await ada.getByPlaceholder(/Comment, or @mention/).fill("@Sable can you list three risks?");
   await ada.locator(".thread.draft").getByRole("button", { name: "Comment" }).click();
   const code = await waitDone;
@@ -177,7 +215,7 @@ try {
   const n = await ada.locator(".version").count();
   log(`history shows ${n} version(s)`);
   await ada.locator(".version").nth(1).click();
-  await ada.locator(".modal.preview").waitFor();
+  await ada.getByRole("dialog").filter({ hasText: "Restore this version" }).waitFor();
   await ada.getByRole("button", { name: "Restore this version" }).click();
   await ada.locator(".ProseMirror p", { hasText: "We ship" }).waitFor({ timeout: 3000 });
   await bea.locator(".ProseMirror p", { hasText: "We ship" }).waitFor({ timeout: 3000 });

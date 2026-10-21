@@ -52,8 +52,8 @@ In a document, **Invite agent** copies instructions to paste to your agent.
 They come down to:
 
 ```sh
-npx skills add digitalex/komore                   # the skill (also served at /SKILL.md)
-npx -y github:digitalex/komore --agent-help       # the protocol
+npx skills add digitalex/komore --skill komore           # the skill (also served at /SKILL.md)
+npx -y github:digitalex/komore --agent-help               # the protocol
 npx -y github:digitalex/komore join <doc-url> --name Sable
 ```
 
@@ -67,7 +67,10 @@ from the doc URL; otherwise it uses `KOMORE_URL` (default
 ```
 cli/komore.mjs           the CLI (root package.json is its package)
 cli/agent-guide.md       the protocol agents read (komore --agent-help)
-skills/komore/SKILL.md   the skill: npx skills add digitalex/komore, /SKILL.md
+skills/komore/SKILL.md   the agent skill (npx skills add digitalex/komore --skill komore; /SKILL.md)
+app/components/graphical the themed Base UI component library, imported as @graphical
+GUI.md, gui/             the "Untitled" theme: values, foundations, component specs
+.agents/skills/          graphical-ui / -convert / -audit, for agents doing UI work
 app/shared/              the one schema, block model, text formats and op engine
 app/server/              HTTP API, WebSocket sync, rooms, SQLite edit log
 app/web/                 the browser app: React shell around ProseMirror + y-prosemirror
@@ -76,9 +79,36 @@ docs/decisions.md        why Yjs, why WebSockets + HTTP, how history works
 docs/parity.md           every UI gesture next to its CLI verb and API op
 ```
 
+## Design system
+
+The UI uses the **Untitled** theme from [Graphical](https://www.graphicalui.com),
+on [Base UI](https://base-ui.com). All 38 components live in
+`app/components/graphical/` and are imported from one entry:
+
+```tsx
+import { Button, Dialog, Field, Select, Toolbar, Tooltip } from "@graphical";
+```
+
+`GUI.md` holds the theme and the rules for UI work; `gui/components.md` links
+each component's specification. During `npm run dev`, `/gallery.html` shows
+every component.
+
+Fonts and icons are licensed separately. The theme selects **GT Standard**
+(Grilli Type) and **Central** icons (Iconists). This project uses their free
+fallbacks for now:
+
+- **Fonts: Timeless Grotesk.** The vendor emails the files, so they need adding
+  by hand. See `app/web/public/fonts/timeless-grotesk/README.md`. Until then,
+  text renders in the system font.
+- **Icons: Lucide.** Configured in `app/web/src/theme/icons.tsx`.
+
+To restore the exact selection, see `app/web/public/fonts/gt-standard/README.md`
+and `app/web/src/theme/icons.tsx`.
+
 ## Test
 
 ```sh
-npm test                 # unit, server and CLI tests
-npm --prefix app run e2e # two browsers + a CLI agent in one doc (needs Chrome)
+npm test                                # unit, server and CLI tests
+npm --prefix app run e2e                # two browsers + a CLI agent in one doc (needs Chrome)
+npm --prefix app run check:components   # all 38 components' rendered styles vs. their specs
 ```

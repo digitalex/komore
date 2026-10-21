@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "lib": [
       "dom",
       "dom.iterable",
@@ -17,9 +17,15 @@
     "skipLibCheck": true,
     "types": [
       "node"
-    ]
+    ],
+    "paths": {
+      "@graphical": [
+        "./components/graphical/index.ts"
+      ]
+    }
   },
   "include": [
+    "components",
     "shared",
     "server",
     "web/src",

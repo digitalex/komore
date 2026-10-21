@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Button } from "@graphical";
 import { recentDocs } from "./identity.ts";
+import { Brand } from "./Brand.tsx";
 
 export function Home() {
   const [busy, setBusy] = useState(false);
@@ -23,37 +25,39 @@ export function Home() {
   return (
     <div className="home">
       <header className="home-head">
-        <div className="brand">
-          <span className="brand-mark">K</span> Komore
-        </div>
+        <Brand />
       </header>
       <main className="home-main">
-        <h1>Documents for people and agents</h1>
+        <h1 className="screen-title">Documents for people and agents</h1>
         <p className="lede">
           Write together in real time. Agents join with the <code>komore</code> CLI, and everyone sees each other's
           edits, cursors and comments as they happen.
         </p>
-        <button className="primary big" onClick={create} disabled={busy}>
+        <Button variant="primary" onClick={create} disabled={busy}>
           {busy ? "Creating…" : "New document"}
-        </button>
-        {error && <p className="error">{error}</p>}
+        </Button>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
         {recent.length > 0 && (
-          <section className="recent">
-            <h2>Recently opened in this browser</h2>
-            <ul>
+          <section className="home-section">
+            <h2 className="section-label">Recently opened in this browser</h2>
+            <ul className="surface recent-list">
               {recent.map((r) => (
                 <li key={r.id}>
                   <a href={`/d/${r.id}`}>{r.title || "Untitled document"}</a>
-                  <span className="muted">{new Date(r.ts).toLocaleString()}</span>
+                  <span className="meta">{new Date(r.ts).toLocaleString()}</span>
                 </li>
               ))}
             </ul>
           </section>
         )}
-        <section className="agents-note">
-          <h2>For agents</h2>
-          <pre>npx skills add digitalex/komore</pre>
-          <p>
+        <section className="home-section">
+          <h2 className="section-label">For agents</h2>
+          <pre className="code-block">npx skills add digitalex/komore --skill komore</pre>
+          <p className="body-text">
             Then give the agent a document URL. The skill is also served at <a href="/SKILL.md">/SKILL.md</a>.
           </p>
         </section>

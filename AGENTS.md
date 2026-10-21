@@ -1,5 +1,10 @@
 # Working on Komore
 
+For UI work, follow GUI.md and use graphical-ui, graphical-convert, or
+graphical-audit as appropriate (skills in `.agents/skills/`). The app uses the
+"Untitled" Graphical theme; its component library lives in
+`app/components/graphical/` and is imported as `@graphical`.
+
 Read `docs/decisions.md` first. It explains the foundation (Yjs, WebSocket
 plus HTTP, server-applied ops, the update log as history) and why.
 
@@ -30,6 +35,7 @@ npm --prefix app run dev        # server :4747 + vite :5173
 npm --prefix app test           # vitest: shared, server, CLI
 npm --prefix app run typecheck
 npm --prefix app run e2e        # Chrome + CLI end to end
+npm --prefix app run check:components  # all 38 themed components vs. their specs (Chrome)
 ```
 
 The server runs TypeScript directly with Node's type stripping, so use only

@@ -3,6 +3,7 @@ import type * as Y from "yjs";
 import type { User } from "../../shared/identity.ts";
 import type { Block, Span } from "../../shared/blocks.ts";
 import { FONTS } from "../../shared/schema.ts";
+import { Button, Dialog, ScrollArea, ThemedIcon } from "@graphical";
 
 interface Version {
   version: number;
@@ -42,7 +43,7 @@ function describe(v: Version): string {
   return `${v.edits} edit${v.edits === 1 ? "" : "s"}`;
 }
 
-export function HistoryPanel({ id, ydoc, user, onClose, flash }: { id: string; ydoc: Y.Doc; user: User; onClose: () => void; flash: (m: string) => void }) {
+export function HistoryPanel({ id, ydoc, user, onClose, flash }: { id: string; ydoc: Y.Doc; user: User; onClose: () => void; flash: (title: string, description?: string) => void }) {
   const [versions, setVersions] = useState<Version[] | null>(null);
   const [preview, setPreview] = useState<{ v: Version; blocks: Block[] } | null>(null);
 
@@ -85,59 +86,74 @@ export function HistoryPanel({ id, ydoc, user, onClose, flash }: { id: string; y
   };
 
   return (
-    <aside className="side-panel">
+    <aside className="side-panel" aria-label="Version history">
       <div className="panel-head">
-        <h2>Version history</h2>
-        <button className="ghost" onClick={onClose} aria-label="Close history">
-          ✕
-        </button>
+        <h2 className="panel-title">Version history</h2>
+        <Button variant="ghost" className="icon-button" onClick={onClose} aria-label="Close history">
+          <ThemedIcon name="close" semantic />
+        </Button>
       </div>
-      <div className="panel-body">
-        {!versions && <div className="muted">Loading…</div>}
-        {versions?.map((v, i) => (
-          <button key={v.version} className={`version ${preview?.v.version === v.version ? "active" : ""}`} onClick={() => open(v)}>
-            <div className="version-top">
-              <strong>{stamp(v.to)}</strong>
-              {i === 0 && <span className="badge">Current</span>}
-            </div>
-            <div className="muted small">{describe(v)}</div>
-            <div className="authors">
-              {v.authors.map((a) => (
-                <span key={a.name} className="author">
-                  <span className="dot" style={{ background: a.color }} /> {a.name}
-                </span>
-              ))}
-            </div>
-          </button>
-        ))}
-      </div>
-      {preview && (
-        <div className="modal-backdrop" onClick={() => setPreview(null)}>
-          <div className="modal preview" onClick={(e) => e.stopPropagation()}>
-            <div className="preview-head">
-              <div>
-                <h2>{stamp(preview.v.to)}</h2>
-                <div className="muted small">
-                  {describe(preview.v)} by {preview.v.authors.map((a) => a.name).join(", ") || "—"} · version {preview.v.version}
+      <ScrollArea.Root className="panel-scroll">
+        <ScrollArea.Viewport>
+          <ScrollArea.Content className="panel-body">
+            {!versions && <div className="meta">Loading…</div>}
+            {versions?.map((v, i) => (
+              <button
+                type="button"
+                key={v.version}
+                className={`version ${preview?.v.version === v.version ? "active" : ""}`}
+                onClick={() => open(v)}
+              >
+                <div className="version-top">
+                  <strong>{stamp(v.to)}</strong>
+                  {i === 0 && <span className="badge">Current</span>}
                 </div>
-              </div>
-              <div className="row">
-                <button onClick={() => setPreview(null)}>Close</button>
-                {versions?.[0]?.version !== preview.v.version && (
-                  <button className="primary" onClick={() => restore(preview.v)}>
-                    Restore this version
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="preview-page editor">
-              <div className="ProseMirror readonly">
-                <Blocks blocks={preview.blocks} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="meta">{describe(v)}</div>
+                <div className="authors">
+                  {v.authors.map((a) => (
+                    <span key={a.name} className="author">
+                      <span className="dot" style={{ background: a.color }} aria-hidden="true" /> {a.name}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </ScrollArea.Content>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar orientation="vertical">
+          <ScrollArea.Thumb />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
+      <Dialog.Root open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <Dialog.Portal>
+          <Dialog.Backdrop />
+          <Dialog.Popup className="preview-dialog">
+            {preview && (
+              <>
+                <div className="preview-head">
+                  <div className="preview-heading">
+                    <Dialog.Title>{stamp(preview.v.to)}</Dialog.Title>
+                    <Dialog.Description>
+                      {describe(preview.v)} by {preview.v.authors.map((a) => a.name).join(", ") || "—"} · version {preview.v.version}
+                    </Dialog.Description>
+                  </div>
+                  <div className="popup-actions">
+                    <Dialog.Close>Close</Dialog.Close>
+                    {versions?.[0]?.version !== preview.v.version && (
+                      <Dialog.Action onClick={() => restore(preview.v)}>Restore this version</Dialog.Action>
+                    )}
+                  </div>
+                </div>
+                <div className="preview-page editor">
+                  <div className="ProseMirror readonly">
+                    <Blocks blocks={preview.blocks} />
+                  </div>
+                </div>
+              </>
+            )}
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
     </aside>
   );
 }
@@ -167,7 +183,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
         if (b.type === "h2") return <h2 key={b.id}><Spans spans={b.spans} /></h2>;
         if (b.type === "bullet")
           return (
-            <ul key={b.id} style={{ marginLeft: `${b.depth * 1.5}em`, marginTop: 0, marginBottom: 0 }}>
+            <ul key={b.id} style={{ marginLeft: `calc(var(--space-l) * ${b.depth})`, marginTop: 0, marginBottom: 0 }}>
               <li><p><Spans spans={b.spans} /></p></li>
             </ul>
           );

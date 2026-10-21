@@ -5,7 +5,9 @@ import { Schema } from "prosemirror-model";
 import type { DOMOutputSpec, Node as PMNode } from "prosemirror-model";
 
 export const FONTS = {
-  sans: 'Inter, "Helvetica Neue", Arial, system-ui, sans-serif',
+  // "Sans" is the document default, which follows the app theme's editorial
+  // font role; the literal stack applies wherever that variable isn't defined.
+  sans: 'var(--font-editorial, Inter, "Helvetica Neue", Arial, system-ui, sans-serif)',
   serif: 'Georgia, "Times New Roman", serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 } as const;

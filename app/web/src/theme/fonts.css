@@ -1,0 +1,40 @@
+/*
+ * Font registration for the Untitled theme.
+ *
+ * Selected: GT Standard ("GT Standard L") — licensed from Grilli Type,
+ *   https://www.grillitype.com/shops/gt-standard. Not in this project.
+ * Active fallback (your choice): Timeless Grotesk — free for personal and
+ *   commercial use, https://timeless.co/type. The vendor delivers the files by
+ *   email, so they have to be fetched by hand; see
+ *   public/fonts/timeless-grotesk/README.md. Until they're there, text falls
+ *   through to the system stack (-apple-system, BlinkMacSystemFont, sans-serif).
+ *
+ * Weights used by every role (brand, ui, editorial, data): 400, 500, 600.
+ */
+
+@font-face {
+  font-family: "Timeless Grotesk";
+  src: url("/fonts/timeless-grotesk/TimelessGrotesk-Variable.woff2") format("woff2-variations"),
+    url("/fonts/timeless-grotesk/TimelessGrotesk-Variable.woff2") format("woff2");
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Timeless Grotesk";
+  src: url("/fonts/timeless-grotesk/TimelessGrotesk-Italic-Variable.woff2") format("woff2-variations"),
+    url("/fonts/timeless-grotesk/TimelessGrotesk-Italic-Variable.woff2") format("woff2");
+  font-weight: 400 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * To restore the exact selection, license GT Standard for web use, put the
+ * webfonts in public/fonts/gt-standard/ and uncomment (one face per weight):
+ *
+ * @font-face { font-family: "GT Standard L"; src: url("/fonts/gt-standard/GT-Standard-L-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+ * @font-face { font-family: "GT Standard L"; src: url("/fonts/gt-standard/GT-Standard-L-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+ * @font-face { font-family: "GT Standard L"; src: url("/fonts/gt-standard/GT-Standard-L-Semibold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+ */

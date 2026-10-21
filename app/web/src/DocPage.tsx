@@ -3,15 +3,29 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import type { EditorView } from "prosemirror-view";
 
+import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
+import { Avatar, Button, Dialog, Field, Toggle, Tooltip } from "@graphical";
+import { colorFor } from "../../shared/identity.ts";
 import type { User } from "../../shared/identity.ts";
 import { createEditor, refreshComments, revealThread, selectionAnchor, selectionMarkdown } from "./editor.ts";
 import { loadUser, saveUser, rememberDoc, initials } from "./identity.ts";
+
+/** A person in the presence bar; their identity colour is data, not theme. */
+function PersonAvatar({ name, color }: { name: string; color: string }) {
+  return (
+    <Avatar.Root className="person-avatar">
+      <Avatar.Fallback style={{ background: color }}>{initials(name)}</Avatar.Fallback>
+    </Avatar.Root>
+  );
+}
 import { Toolbar } from "./Toolbar.tsx";
 import { CommentsPanel } from "./CommentsPanel.tsx";
 import type { Draft } from "./CommentsPanel.tsx";
 import { HistoryPanel } from "./HistoryPanel.tsx";
 import { threadsOf, findThread } from "../../shared/comments.ts";
 import type { ThreadData } from "../../shared/comments.ts";
+import { Brand } from "./Brand.tsx";
+import { useNotify } from "./theme/ThemeRoot.tsx";
 
 interface Peer {
   clientId: number;
@@ -35,13 +49,13 @@ export function DocPage({ id }: { id: string }) {
   if (exists === false)
     return (
       <div className="center-page">
-        <h1>No such document</h1>
-        <p className="muted">
+        <h1 className="page-title">No such document</h1>
+        <p className="body-text muted">
           Nothing lives at <code>/d/{id}</code>.
         </p>
-        <a className="button primary" href="/">
+        <Button variant="primary" nativeButton={false} render={<a href="/" />}>
           Go home
-        </a>
+        </Button>
       </div>
     );
   if (!user || renaming)
@@ -55,36 +69,48 @@ export function DocPage({ id }: { id: string }) {
         onCancel={user ? () => setRenaming(false) : undefined}
       />
     );
-  if (exists === null) return <div className="center-page muted">Loading…</div>;
+  if (exists === null) return <div className="center-page body-text muted">Loading…</div>;
   return <DocEditor key={user.id} id={id} user={user} onRename={() => setRenaming(true)} />;
 }
 
 function NameDialog({ initial, onSave, onCancel }: { initial: string; onSave: (n: string) => void; onCancel?: () => void }) {
   const [name, setName] = useState(initial);
+  // Without a name there is nothing to fall back to, so the dialog can't be dismissed.
+  const dismissible = !!onCancel;
   return (
-    <div className="modal-backdrop">
-      <form
-        className="modal name-dialog"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim()) onSave(name.trim());
-        }}
-      >
-        <h2>What should others call you?</h2>
-        <p className="muted">Your name appears on your cursor, your edits and your comments. People can @mention you by it.</p>
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" maxLength={40} />
-        <div className="row end">
-          {onCancel && (
-            <button type="button" onClick={onCancel}>
-              Cancel
-            </button>
-          )}
-          <button className="primary" type="submit" disabled={!name.trim()}>
-            Continue
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => !open && dismissible && onCancel?.()} disablePointerDismissal={!dismissible}>
+      <Dialog.Portal>
+        <Dialog.Backdrop />
+        <Dialog.Popup className="name-dialog">
+          <form
+            className="dialog-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (name.trim()) onSave(name.trim());
+            }}
+          >
+            <Dialog.Title>What should others call you?</Dialog.Title>
+            <Dialog.Description>
+              Your name appears on your cursor, your edits and your comments. People can @mention you by it.
+            </Dialog.Description>
+            <Field.Root>
+              <Field.Label>Name</Field.Label>
+              <Field.Control autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" maxLength={40} />
+            </Field.Root>
+            <div className="dialog-actions">
+              {dismissible && (
+                <Button variant="secondary" type="button" onClick={onCancel}>
+                  Cancel
+                </Button>
+              )}
+              <Button variant="primary" type="submit" disabled={!name.trim()}>
+                Continue
+              </Button>
+            </div>
+          </form>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -99,7 +125,6 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
   const [panel, setPanel] = useState<"comments" | "history" | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [activeThread, setActiveThread] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [threads, setThreads] = useState<ThreadData[]>([]);
   const [linkEditing, setLinkEditing] = useState(false);
@@ -115,10 +140,7 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
     return { ydoc, provider };
   }, [id, user]);
 
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600);
-  }, []);
+  const flash = useNotify();
 
   // Connection, sync, presence.
   useEffect(() => {
@@ -133,7 +155,7 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
         const key = u.id ?? u.name;
         if (seen.has(key) || key === user.id) return;
         seen.add(key);
-        list.push({ clientId, name: u.name, color: u.color ?? "#888", status: (state.status as string) ?? null, via: (state.via as string) ?? "web" });
+        list.push({ clientId, name: u.name, color: u.color ?? colorFor(u.name), status: (state.status as string) ?? null, via: (state.via as string) ?? "web" });
       });
       setPeers(list);
     };
@@ -223,10 +245,10 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
     }
   };
 
-  const copyText = async (text: string, msg: string) => {
+  const copyText = async (text: string, msg: string, detail?: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      flash(msg);
+      flash(msg, detail);
     } catch {
       flash("Couldn't reach the clipboard");
     }
@@ -237,7 +259,7 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
     `Join me in a Komore document: ${docUrl}`,
     ``,
     `Komore is a shared real-time doc where people and agents edit together. Your edits, cursor and comments appear live.`,
-    `1. Install the skill (once): npx skills add digitalex/komore. It's also at ${location.origin}/SKILL.md`,
+    `1. Install the skill (once): npx skills add digitalex/komore --skill komore. It's also at ${location.origin}/SKILL.md`,
     `2. Read the protocol: npx -y github:digitalex/komore --agent-help`,
     `3. Join with a name of your own: npx -y github:digitalex/komore join ${docUrl} --name "<your name>"`,
     `Then address the open comments, and park on \`komore wait\` so I can @mention you.`,
@@ -256,45 +278,70 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
   return (
     <div className="doc-page">
       <header className="topbar">
-        <a className="brand small" href="/" title="Komore home">
-          <span className="brand-mark">K</span>
-        </a>
+        <Brand compact />
         <div className="title-area">
           <div className="doc-title">{title || "Untitled document"}</div>
-          <div className="doc-sub muted">
-            <span className={`dot ${connected ? "on" : "off"}`} /> {connected ? "Live" : "Reconnecting…"}
+          <div className="doc-sub">
+            <span className={`dot ${connected ? "on" : "off"}`} aria-hidden="true" /> {connected ? "Live" : "Reconnecting…"}
           </div>
         </div>
-        <div className="presence">
+        <div className="presence" aria-label="People here">
           {peers.map((p) => (
-            <div key={p.clientId} className="avatar-wrap" title={`${p.name}${p.status ? ` — ${p.status}` : ""}${p.via === "api" ? " (via API)" : ""}`}>
-              <span className="avatar" style={{ background: p.color }}>
-                {initials(p.name)}
-              </span>
-              {p.status && <span className="status-pill" style={{ borderColor: p.color }}>{p.status}</span>}
+            <div key={p.clientId} className="presence-item">
+              <Tooltip.Root>
+                <BaseTooltip.Trigger
+                  className="presence-trigger"
+                  aria-label={`${p.name}${p.status ? `: ${p.status}` : ""}`}
+                >
+                  <PersonAvatar name={p.name} color={p.color} />
+                </BaseTooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner sideOffset={8}>
+                    <Tooltip.Popup>
+                      {p.name}
+                      {p.status ? ` — ${p.status}` : ""}
+                      {p.via === "api" ? " (via API)" : ""}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              {p.status && (
+                <span className="status-pill">
+                  <span className="dot" style={{ background: p.color }} aria-hidden="true" />
+                  {p.status}
+                </span>
+              )}
             </div>
           ))}
-          <button className="avatar-wrap me" onClick={onRename} title={`You (${user.name}) — click to rename`}>
-            <span className="avatar" style={{ background: user.color }}>
-              {initials(user.name)}
-            </span>
-          </button>
+          <Tooltip.Root>
+            <BaseTooltip.Trigger className="presence-trigger me" onClick={onRename} aria-label={`You (${user.name}). Rename`}>
+              <PersonAvatar name={user.name} color={user.color} />
+            </BaseTooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner sideOffset={8}>
+                <Tooltip.Popup>You ({user.name}). Click to rename</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
         </div>
         <div className="top-actions">
-          <button className={panel === "history" ? "toggled" : ""} onClick={() => setPanel(panel === "history" ? null : "history")}>
+          <Toggle pressed={panel === "history"} onPressedChange={(on) => setPanel(on ? "history" : null)}>
             History
-          </button>
-          <button className={panel === "comments" ? "toggled" : ""} onClick={() => setPanel(panel === "comments" ? null : "comments")}>
+          </Toggle>
+          <Toggle pressed={panel === "comments"} onPressedChange={(on) => setPanel(on ? "comments" : null)}>
             Comments{openThreads ? ` · ${openThreads}` : ""}
-          </button>
-          <button onClick={() => copyText(inviteText, "Agent instructions copied. Paste them to your agent.")}>Invite agent</button>
-          <button className="primary" onClick={() => copyText(docUrl, "Link copied. Anyone with it can edit.")}>
+          </Toggle>
+          <Button variant="secondary" onClick={() => copyText(inviteText, "Agent instructions copied", "Paste them to your agent.")}>
+            Invite agent
+          </Button>
+          <Button variant="primary" onClick={() => copyText(docUrl, "Link copied", "Anyone with it can edit.")}>
             Share
-          </button>
+          </Button>
         </div>
       </header>
 
       {view && (
+        <div className="toolbar-row">
         <Toolbar
           view={view}
           linkEditing={linkEditing}
@@ -302,12 +349,13 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
           onComment={openComment}
           onCopyMarkdown={copyMarkdown}
         />
+        </div>
       )}
 
       <div className="workspace">
         <div className="doc-scroll">
           <div className="page">
-            {!synced && <div className="muted loading">Connecting…</div>}
+            {!synced && <div className="body-text muted loading">Connecting…</div>}
             <div ref={mountRef} className="editor" />
           </div>
         </div>
@@ -326,7 +374,6 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
         )}
         {panel === "history" && <HistoryPanel id={id} ydoc={ydoc} user={user} onClose={() => setPanel(null)} flash={flash} />}
       </div>
-      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

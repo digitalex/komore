@@ -1,14 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EditorView } from "prosemirror-view";
 import { TextSelection } from "prosemirror-state";
 import { undoCommand, redoCommand } from "y-prosemirror";
+import { Select as BaseSelect } from "@base-ui/react/select";
+import { Popover as BasePopover } from "@base-ui/react/popover";
+import { Toggle as BaseToggle } from "@base-ui/react/toggle";
+import { Link2, List, MessageSquarePlus } from "lucide-react";
+import { Button, Field, Popover, Select, ThemedIcon, Toolbar as ToolbarParts } from "@graphical";
 import { schema, COLORS, FONTS, SIZES } from "../../shared/schema.ts";
 import { currentKind, isMarkActive, linkRange, markAttr, setKind, setMark, toggleBold } from "./editor.ts";
 import type { Kind } from "./editor.ts";
+import { AppIcon } from "./theme/icons.tsx";
+import { appTheme } from "./theme/document.ts";
 
-const DEFAULT_SIZE: Record<Kind, number> = { p: 16, bullet: 16, h1: 30, h2: 22 };
+// The default size of each block type follows the theme's text steps
+// (body = m, Heading 2 = l, Heading 1 = xl), matching the editor stylesheet.
+const step = (key: "m" | "l" | "xl") => Math.round(appTheme.theme.text[key].size);
+const DEFAULT_SIZE: Record<Kind, number> = { p: step("m"), bullet: step("m"), h1: step("xl"), h2: step("l") };
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 const mod = isMac ? "⌘" : "Ctrl+";
+
+const STYLE_ITEMS = [
+  { value: "p", label: "Body text" },
+  { value: "h1", label: "Heading 1" },
+  { value: "h2", label: "Heading 2" },
+];
+const FONT_ITEMS = Object.keys(FONTS).map((f) => ({ value: f, label: f[0].toUpperCase() + f.slice(1) }));
 
 interface Props {
   view: EditorView;
@@ -27,108 +44,172 @@ export function Toolbar({ view, linkEditing, setLinkEditing, onComment, onCopyMa
   const bold = isMarkActive(state, schema.marks.bold);
   const link = linkRange(state);
   const [colorOpen, setColorOpen] = useState(false);
+  // Popups hand focus back to the document when they close.
+  const editorFocus = useMemo(() => ({ current: view.dom as HTMLElement }), [view]);
 
   const run = (cmd: (s: typeof state, d: typeof view.dispatch, v: EditorView) => boolean) => {
     cmd(view.state, view.dispatch, view);
     view.focus();
   };
 
-  const sizes = [...new Set([...SIZES, size])].sort((a, b) => a - b);
+  const sizeItems = [...new Set([...SIZES, size])].sort((a, b) => a - b).map((s) => ({ value: s, label: String(s) }));
 
   return (
-    <div className="toolbar" onMouseDown={(e) => {
-      // Keep the editor's selection when clicking buttons (but let inputs focus).
-      const t = e.target as HTMLElement;
-      if (!t.closest("select, input")) e.preventDefault();
-    }}>
-      <button title={`Undo (${mod}Z)`} onClick={() => run((s, d) => !!undoCommand(s, d))} aria-label="Undo" className="icon">
-        ⟲
-      </button>
-      <button title={`Redo (${mod}⇧Z)`} onClick={() => run((s, d) => !!redoCommand(s, d))} aria-label="Redo" className="icon">
-        ⟳
-      </button>
-      <span className="sep" />
-      <select
-        title="Text style"
+    <ToolbarParts.Root className="editor-toolbar" aria-label="Formatting">
+      <ToolbarParts.Button className="ui-toolbar-icon" aria-label="Undo" title={`Undo (${mod}Z)`} onClick={() => run((s, d) => !!undoCommand(s, d))}>
+        <ThemedIcon name="undo" semantic />
+      </ToolbarParts.Button>
+      <ToolbarParts.Button className="ui-toolbar-icon" aria-label="Redo" title={`Redo (${mod}⇧Z)`} onClick={() => run((s, d) => !!redoCommand(s, d))}>
+        <ThemedIcon name="redo" semantic />
+      </ToolbarParts.Button>
+      <ToolbarParts.Separator />
+
+      <ToolbarSelect
+        label="Text style"
         value={kind === "bullet" ? "p" : kind}
-        onChange={(e) => run(setKind(e.target.value as Kind))}
-        aria-label="Text style"
-      >
-        <option value="p">Body text</option>
-        <option value="h1">Heading 1</option>
-        <option value="h2">Heading 2</option>
-      </select>
-      <select
-        title="Font"
+        items={STYLE_ITEMS}
+        onChange={(v) => run(setKind(v as Kind))}
+        finalFocus={editorFocus}
+      />
+      <ToolbarSelect
+        label="Font"
         value={font}
-        onChange={(e) => run(setMark(schema.marks.font, e.target.value === "sans" ? null : { family: e.target.value }))}
-        aria-label="Font"
-      >
-        {Object.keys(FONTS).map((f) => (
-          <option key={f} value={f} style={{ fontFamily: FONTS[f as keyof typeof FONTS] }}>
-            {f[0].toUpperCase() + f.slice(1)}
-          </option>
-        ))}
-      </select>
-      <select
-        title="Font size"
-        className="size"
+        items={FONT_ITEMS}
+        onChange={(v) => run(setMark(schema.marks.font, v === "sans" ? null : { family: v }))}
+        finalFocus={editorFocus}
+      />
+      <ToolbarSelect
+        label="Font size"
         value={size}
-        onChange={(e) => {
-          const px = Number(e.target.value);
-          run(setMark(schema.marks.size, px === DEFAULT_SIZE[kind] ? null : { px }));
-        }}
-        aria-label="Font size"
+        items={sizeItems}
+        onChange={(px) => run(setMark(schema.marks.size, px === DEFAULT_SIZE[kind] ? null : { px }))}
+        finalFocus={editorFocus}
+      />
+      <ToolbarParts.Separator />
+
+      <ToolbarParts.Button
+        className="ui-toolbar-icon"
+        aria-label="Bold"
+        title={`Bold (${mod}B)`}
+        render={<BaseToggle pressed={bold} onPressedChange={() => run(toggleBold)} />}
       >
-        {sizes.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
-      <span className="sep" />
-      <button title={`Bold (${mod}B)`} className={bold ? "on" : ""} onClick={() => run(toggleBold)} aria-label="Bold">
-        <b>B</b>
-      </button>
-      <div className="color-wrap">
-        <button title="Text color" onClick={() => setColorOpen(!colorOpen)} aria-label="Text color">
-          <span className="color-a" style={{ borderBottomColor: color ?? "var(--ink)" }}>
+        <ThemedIcon name="bold" semantic />
+      </ToolbarParts.Button>
+
+      <Popover.Root open={colorOpen} onOpenChange={setColorOpen}>
+        <ToolbarParts.Button className="ui-toolbar-icon" aria-label="Text color" title="Text color" render={<BasePopover.Trigger />}>
+          <span className="color-glyph" style={{ borderBottomColor: color ?? "currentColor" }} aria-hidden="true">
             A
           </span>
-        </button>
-        {colorOpen && (
-          <div className="color-pop" onMouseLeave={() => setColorOpen(false)}>
-            <button className="swatch default" title="Default" onClick={() => (run(setMark(schema.marks.color, null)), setColorOpen(false))}>
-              ⃠
-            </button>
-            {Object.entries(COLORS).map(([name, hex]) => (
-              <button
-                key={name}
-                className={`swatch ${color === hex ? "on" : ""}`}
-                title={name}
-                style={{ background: hex }}
-                onClick={() => (run(setMark(schema.marks.color, { value: hex })), setColorOpen(false))}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-      <button title={`Link (${mod}K)`} className={link ? "on" : ""} onClick={() => setLinkEditing(!linkEditing)} aria-label="Link">
-        🔗
-      </button>
-      <button title={`Bulleted list (${mod}⇧8)`} className={kind === "bullet" ? "on" : ""} onClick={() => run(setKind(kind === "bullet" ? "p" : "bullet"))} aria-label="Bulleted list">
-        • ≡
-      </button>
-      <span className="sep" />
-      <button title={`Comment (${mod}⌥M)`} onClick={onComment}>
+        </ToolbarParts.Button>
+        <Popover.Portal>
+          <Popover.Positioner sideOffset={8} align="start">
+            <Popover.Popup className="color-popup" finalFocus={editorFocus}>
+              <Popover.Title>Text color</Popover.Title>
+              <div className="swatches">
+                <button
+                  type="button"
+                  className={`swatch default${color === null ? " on" : ""}`}
+                  aria-label="Default"
+                  aria-pressed={color === null}
+                  onClick={() => (run(setMark(schema.marks.color, null)), setColorOpen(false))}
+                />
+                {Object.entries(COLORS).map(([name, hex]) => (
+                  <button
+                    type="button"
+                    key={name}
+                    className={`swatch${color === hex ? " on" : ""}`}
+                    aria-label={name}
+                    aria-pressed={color === hex}
+                    title={name}
+                    // Document colours are content, so each swatch shows its real value.
+                    style={{ background: hex }}
+                    onClick={() => (run(setMark(schema.marks.color, { value: hex })), setColorOpen(false))}
+                  />
+                ))}
+              </div>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+
+      <Popover.Root open={linkEditing} onOpenChange={setLinkEditing}>
+        <ToolbarParts.Button
+          className="ui-toolbar-icon"
+          aria-label="Link"
+          title={`Link (${mod}K)`}
+          data-pressed={link ? "" : undefined}
+          render={<BasePopover.Trigger />}
+        >
+          <AppIcon icon={Link2} />
+        </ToolbarParts.Button>
+        <Popover.Portal>
+          <Popover.Positioner sideOffset={8} align="start">
+            <Popover.Popup finalFocus={editorFocus}>
+              <LinkEditor view={view} current={link?.href ?? ""} onDone={() => setLinkEditing(false)} />
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+
+      <ToolbarParts.Button
+        className="ui-toolbar-icon"
+        aria-label="Bulleted list"
+        title={`Bulleted list (${mod}⇧8)`}
+        render={<BaseToggle pressed={kind === "bullet"} onPressedChange={() => run(setKind(kind === "bullet" ? "p" : "bullet"))} />}
+      >
+        <AppIcon icon={List} />
+      </ToolbarParts.Button>
+      <ToolbarParts.Separator />
+
+      <ToolbarParts.Button title={`Comment (${mod}⌥M)`} onClick={onComment}>
+        <AppIcon icon={MessageSquarePlus} />
         Comment
-      </button>
+      </ToolbarParts.Button>
       <span className="grow" />
-      <button title="Copies the selection, or the whole document if nothing is selected" onClick={onCopyMarkdown}>
+      <ToolbarParts.Button title="Copies the selection, or the whole document if nothing is selected" onClick={onCopyMarkdown}>
+        <ThemedIcon name="copy" semantic />
         Copy as Markdown
-      </button>
-      {linkEditing && <LinkEditor view={view} current={link?.href ?? ""} onDone={() => (setLinkEditing(false), view.focus())} />}
-    </div>
+      </ToolbarParts.Button>
+    </ToolbarParts.Root>
+  );
+}
+
+/** A select whose trigger is a toolbar control (one element, roving focus intact). */
+function ToolbarSelect<V extends string | number>({
+  label,
+  value,
+  items,
+  onChange,
+  finalFocus,
+}: {
+  label: string;
+  value: V;
+  items: { value: V; label: string }[];
+  onChange: (value: V) => void;
+  finalFocus: React.RefObject<HTMLElement | null>;
+}) {
+  return (
+    <Select.Root value={value} items={items} onValueChange={(v) => v !== null && onChange(v as V)}>
+      <ToolbarParts.Button className="toolbar-select" aria-label={label} title={label} render={<BaseSelect.Trigger />}>
+        <Select.Value />
+        <Select.Icon />
+      </ToolbarParts.Button>
+      <Select.Portal>
+        <Select.Positioner>
+          <Select.Popup finalFocus={finalFocus}>
+            <Select.List>
+              {items.map((item) => (
+                <Select.Item key={String(item.value)} value={item.value}>
+                  <Select.ItemText>{item.label}</Select.ItemText>
+                  <Select.ItemIndicator />
+                </Select.Item>
+              ))}
+            </Select.List>
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
   );
 }
 
@@ -161,24 +242,26 @@ function LinkEditor({ view, current, onDone }: { view: EditorView; current: stri
 
   return (
     <form
-      className="link-editor"
-      onSubmit={(e) => {
+      className="link-form"
+      onSubmit={(e: FormEvent) => {
         e.preventDefault();
         apply(href.trim() || null);
       }}
     >
-      <input ref={input} value={href} onChange={(e) => setHref(e.target.value)} placeholder="Paste or type a link" onKeyDown={(e) => e.key === "Escape" && onDone()} />
-      <button className="primary" type="submit">
-        Apply
-      </button>
-      {current && (
-        <button type="button" onClick={() => apply(null)}>
-          Remove
-        </button>
-      )}
-      <button type="button" onClick={onDone}>
-        Cancel
-      </button>
+      <Field.Root>
+        <Field.Label>Link</Field.Label>
+        <Field.Control ref={input} value={href} onChange={(e) => setHref(e.target.value)} placeholder="Paste or type a link" />
+      </Field.Root>
+      <div className="popup-actions">
+        {current && (
+          <Button variant="secondary" type="button" onClick={() => apply(null)}>
+            Remove
+          </Button>
+        )}
+        <Button variant="primary" type="submit">
+          Apply
+        </Button>
+      </div>
     </form>
   );
 }

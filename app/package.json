@@ -11,10 +11,14 @@
     "start": "node server/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "vite build && node test/e2e.mjs"
+    "e2e": "vite build && node test/e2e.mjs",
+    "check:components": "node test/components.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "lib0": "^0.2.119",
+    "lucide-react": "^1.60.0",
+    "motion": "^14.4.0",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.1",
     "prosemirror-inputrules": "^1.5.1",
