@@ -51,7 +51,8 @@ const blockIdPlugin = new Plugin({
       } else seen.add(id);
       return false;
     });
-    if (tr) (tr as Transaction).setMeta("addToHistory", false);
+    // Not `addToHistory: false`: y-prosemirror syncs the whole batch under one
+    // origin, so that meta would drop the user's own edit from undo as well.
     return tr;
   },
 });

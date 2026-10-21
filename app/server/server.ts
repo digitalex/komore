@@ -301,6 +301,8 @@ export function startServer(opts: ServerOptions): { server: Server; store: Store
       const dir = resolve(opts.staticDir);
       const file = resolve(dir, "." + decodeURIComponent(path));
       if (file.startsWith(dir) && path !== "/" && (await serveFile(res, file, path.startsWith("/assets/")))) return;
+      // A missing file (font, image, script) is a 404, not the app shell.
+      if (extname(path) && !path.endsWith(".html")) return send(res, 404, "Not found", "text/plain; charset=utf-8");
       if (await serveFile(res, join(dir, "index.html"))) return;
     }
     send(res, 404, "Not found — is the web app built? (npm run build)", "text/plain; charset=utf-8");
