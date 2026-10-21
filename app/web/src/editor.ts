@@ -221,24 +221,63 @@ export function setMark(type: MarkType, attrs: Record<string, unknown> | null): 
 
 export const toggleBold = toggleMark(schema.marks.bold);
 
-/** The extent of the link around the cursor, if any. */
+/** The extent of the link around the cursor: the contiguous run of text carrying it. */
 export function linkRange(state: EditorState): { from: number; to: number; href: string } | null {
   const { $from } = state.selection;
   const mark = schema.marks.link.isInSet($from.marks()) ?? ($from.nodeBefore && schema.marks.link.isInSet($from.nodeBefore.marks));
   if (!mark) return null;
-  const parent = $from.parent;
   const start = $from.start();
-  let from = -1;
-  let to = -1;
-  parent.forEach((child, offset) => {
-    const has = mark.isInSet(child.marks);
+  const runs: { from: number; to: number }[] = [];
+  $from.parent.forEach((child, offset) => {
+    if (!mark.isInSet(child.marks)) return;
     const s = start + offset;
-    const e = s + child.nodeSize;
-    if (has && from < 0 && e >= $from.pos) from = s;
-    if (has && from >= 0 && s <= $from.pos) to = e;
+    const last = runs[runs.length - 1];
+    if (last && last.to === s) last.to = s + child.nodeSize;
+    else runs.push({ from: s, to: s + child.nodeSize });
   });
-  return from >= 0 && to > from ? { from, to, href: mark.attrs.href } : null;
+  const run = runs.find((r) => r.from <= $from.pos && $from.pos <= r.to);
+  return run ? { ...run, href: mark.attrs.href } : null;
 }
+
+/** What someone typed into a link field, as a URL ("example.com" → "https://example.com"). */
+export function normalizeHref(value: string): string {
+  const v = value.trim();
+  return /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+}
+
+/** Only these schemes are opened from the editor; links written through the API can contain anything. */
+export function isSafeHref(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href.trim());
+}
+
+/**
+ * Replace the link around the cursor with new anchor text and/or URL, as one
+ * undoable edit. The text keeps the formatting of the link's first character;
+ * an empty URL removes the link but keeps the text.
+ */
+export function updateLink(text: string, href: string): Command {
+  return (state, dispatch) => {
+    const range = linkRange(state);
+    if (!range || !text) return false;
+    if (!dispatch) return true;
+    const first = state.doc.nodeAt(range.from);
+    let marks = schema.marks.link.removeFromSet(first?.marks ?? []);
+    if (href.trim()) marks = schema.marks.link.create({ href: normalizeHref(href) }).addToSet(marks);
+    const tr = state.tr.replaceWith(range.from, range.to, schema.text(text, marks));
+    // Rest the caret inside the link so its box stays open on the result.
+    tr.setSelection(TextSelection.create(tr.doc, range.from + Math.max(1, text.length - 1)));
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
+}
+
+/** Remove the link around the cursor, keeping its text. */
+export const removeLink: Command = (state, dispatch) => {
+  const range = linkRange(state);
+  if (!range) return false;
+  if (dispatch) dispatch(state.tr.removeMark(range.from, range.to, schema.marks.link));
+  return true;
+};
 
 // ---------------------------------------------------------------- markdown export
 
@@ -353,7 +392,7 @@ export function createEditor(mount: HTMLElement, opts: EditorOptions): EditorVie
       click(_view, event) {
         const a = (event.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
         if (a && (event.metaKey || event.ctrlKey)) {
-          window.open(a.href, "_blank", "noopener");
+          if (isSafeHref(a.getAttribute("href") ?? "")) window.open(a.href, "_blank", "noopener,noreferrer");
           event.preventDefault();
           return true;
         }

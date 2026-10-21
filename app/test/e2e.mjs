@@ -148,6 +148,21 @@ try {
   log("agent reads Ada's formatting:\n" + text.split("\n").map((l) => "    " + l).join("\n"));
   if (!text.includes("[[review](https://example.com/review)]{color=green font=serif size=20}")) throw new Error("toolbar formatting not reflected");
 
+  // Clicking a link opens its box: edit the anchor text and URL in one go, keeping the styling.
+  await ada.locator(".ProseMirror a").getByText("review").click();
+  await ada.getByRole("dialog", { name: "Link details" }).waitFor();
+  await ada.getByRole("button", { name: "Edit link" }).click();
+  await ada.getByRole("textbox", { name: "Text" }).fill("design review");
+  await ada.getByRole("textbox", { name: "Link" }).fill("example.com/design-review");
+  await ada.getByRole("button", { name: "Save" }).click();
+  await ada.waitForTimeout(400);
+  const relinked = komore("read", "--text");
+  if (!relinked.includes("[[design review](https://example.com/design-review)]{color=green font=serif size=20}")) throw new Error("link edit not reflected: " + relinked);
+  const [tab] = await Promise.all([ada.context().waitForEvent("page"), ada.getByRole("button", { name: "Visit link" }).click()]);
+  if (!tab.url().startsWith("https://example.com/design-review")) throw new Error("visit opened " + tab.url());
+  await tab.close();
+  log("link box: edited text + URL (styling kept), visit opened it");
+
   // Keyboard: the toolbar's style select opens and commits with the keyboard alone.
   await ada.locator(".ProseMirror h1").getByText("Launch plan").click();
   const styleSelect = ada.getByRole("combobox", { name: "Text style" });
@@ -194,7 +209,9 @@ try {
   await ada.locator(".ProseMirror h2").click({ position: { x: 4, y: 12 } });
   for (let i = 0; i < 5; i++) await ada.keyboard.press("Shift+ArrowRight");
   await ada.waitForTimeout(100);
-  await ada.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Comment", exact: true }).click();
+  // Right-click the selection and choose Comment.
+  await ada.locator(".ProseMirror h2").click({ position: { x: 20, y: 12 }, button: "right" });
+  await ada.getByRole("menuitem", { name: /Comment/ }).click();
   await ada.getByPlaceholder(/Comment, or @mention/).fill("@Sable can you list three risks?");
   await ada.locator(".thread.draft").getByRole("button", { name: "Comment" }).click();
   const code = await waitDone;

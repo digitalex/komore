@@ -349,6 +349,11 @@ a {
 .toolbar-row {
   padding: 0 var(--space-m) var(--space-xs);
   background: var(--neutral-1);
+  /* A soft edge so the header doesn't bleed into the page scrolling beneath it;
+     raised so the shadow paints over the document and the side panels. */
+  position: relative;
+  z-index: 2;
+  box-shadow: var(--shadow-m);
 }
 .editor-toolbar {
   width: 100%;
@@ -395,6 +400,35 @@ a {
   box-shadow:
     0 0 0 var(--space-xxs) var(--neutral-1),
     0 0 0 calc(var(--space-xxs) * 1.5) var(--neutral-10);
+}
+
+/* The link box. */
+.link-bubble.ui-popover {
+  width: auto;
+  max-width: min(420px, calc(100vw - var(--space-xl)));
+}
+.link-bubble-view {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.link-bubble-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-2);
+  max-width: 280px;
+}
+.link-bubble-actions {
+  display: flex;
+  gap: var(--space-xxs);
+  flex: none;
+}
+.link-bubble .link-form {
+  width: min(300px, calc(100vw - var(--space-xl) * 2));
 }
 
 /* ------------------------------------------------------------ page + editor */

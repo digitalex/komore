@@ -8,7 +8,7 @@ import { Toggle as BaseToggle } from "@base-ui/react/toggle";
 import { Link2, List, MessageSquarePlus } from "lucide-react";
 import { Button, Field, Popover, Select, ThemedIcon, Toolbar as ToolbarParts } from "@graphical";
 import { schema, COLORS, FONTS, SIZES } from "../../shared/schema.ts";
-import { currentKind, isMarkActive, linkRange, markAttr, setKind, setMark, toggleBold } from "./editor.ts";
+import { currentKind, isMarkActive, linkRange, markAttr, normalizeHref, setKind, setMark, toggleBold } from "./editor.ts";
 import type { Kind } from "./editor.ts";
 import { AppIcon } from "./theme/icons.tsx";
 import { appTheme } from "./theme/document.ts";
@@ -225,7 +225,7 @@ function LinkEditor({ view, current, onDone }: { view: EditorView; current: stri
     if (empty && range) ({ from, to } = range);
     let tr = state.tr;
     if (value) {
-      const url = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+      const url = normalizeHref(value);
       if (from === to) {
         // Nothing selected: insert the URL itself as the link text.
         tr = tr.insertText(url, from).addMark(from, from + url.length, schema.marks.link.create({ href: url }));

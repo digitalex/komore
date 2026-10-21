@@ -4,11 +4,16 @@ import { WebsocketProvider } from "y-websocket";
 import type { EditorView } from "prosemirror-view";
 
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { Avatar, Button, Dialog, Field, Toggle, Tooltip } from "@graphical";
+import { ContextMenu as BaseContextMenu } from "@base-ui/react/context-menu";
+import { MessageSquarePlus } from "lucide-react";
+import { Avatar, Button, ContextMenu, Dialog, Field, Menu, ThemedIcon, Toggle, Tooltip } from "@graphical";
+import { AppIcon } from "./theme/icons.tsx";
 import { colorFor } from "../../shared/identity.ts";
 import type { User } from "../../shared/identity.ts";
 import { createEditor, refreshComments, revealThread, selectionAnchor, selectionMarkdown } from "./editor.ts";
 import { loadUser, saveUser, rememberDoc, initials } from "./identity.ts";
+
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** A person in the presence bar; their identity colour is data, not theme. */
 function PersonAvatar({ name, color }: { name: string; color: string }) {
@@ -19,6 +24,7 @@ function PersonAvatar({ name, color }: { name: string; color: string }) {
   );
 }
 import { Toolbar } from "./Toolbar.tsx";
+import { LinkBubble } from "./LinkBubble.tsx";
 import { CommentsPanel } from "./CommentsPanel.tsx";
 import type { Draft } from "./CommentsPanel.tsx";
 import { HistoryPanel } from "./HistoryPanel.tsx";
@@ -354,10 +360,39 @@ function DocEditor({ id, user, onRename }: { id: string; user: User; onRename: (
 
       <div className="workspace">
         <div className="doc-scroll">
-          <div className="page">
-            {!synced && <div className="body-text muted loading">Connecting…</div>}
-            <div ref={mountRef} className="editor" />
-          </div>
+          {/* Right-click on selected text offers to comment on it. With nothing
+              selected the browser's own menu (spelling, paste) is left alone. */}
+          <ContextMenu.Root>
+            <BaseContextMenu.Trigger
+              className="page"
+              onContextMenuCapture={(e) => {
+                if (!view || view.state.selection.empty) e.stopPropagation();
+              }}
+            >
+              {!synced && <div className="body-text muted loading">Connecting…</div>}
+              <div ref={mountRef} className="editor" />
+              {view && !linkEditing && <LinkBubble view={view} />}
+            </BaseContextMenu.Trigger>
+            <ContextMenu.Portal>
+              <ContextMenu.Positioner>
+                <ContextMenu.Popup finalFocus={false}>
+                  <ContextMenu.Item onClick={openComment}>
+                    <Menu.ItemContent icon={<AppIcon icon={MessageSquarePlus} />} shortcut={isMac ? "⌘⌥M" : "Ctrl+Alt+M"}>
+                      Comment
+                    </Menu.ItemContent>
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    onClick={() => {
+                      copyMarkdown();
+                      view?.focus();
+                    }}
+                  >
+                    <Menu.ItemContent icon={<ThemedIcon name="copy" semantic />}>Copy as Markdown</Menu.ItemContent>
+                  </ContextMenu.Item>
+                </ContextMenu.Popup>
+              </ContextMenu.Positioner>
+            </ContextMenu.Portal>
+          </ContextMenu.Root>
         </div>
         {panel === "comments" && (
           <CommentsPanel
